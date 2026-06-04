@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Teacher Scheduler</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#f6f1e7; --paper-2:#efe8da; --ink:#211d18; --ink-soft:#5b534a;
+    --line:#ddd2bf; --accent:#e0501f; --accent-deep:#b53b13; --good:#2f6f4f;
+    --card:#fffdf8; --shadow:0 1px 0 rgba(33,29,24,.04), 0 18px 40px -28px rgba(33,29,24,.45); --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:radial-gradient(120% 80% at 100% 0%, #fbf7ee 0%, var(--paper) 42%, var(--paper-2) 100%);
+    color:var(--ink); font-family:"Hanken Grotesk",system-ui,sans-serif; font-size:15px; line-height:1.5;
+    min-height:100vh; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:920px;margin:0 auto;padding:32px 24px 96px}
+  header.top{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;padding-bottom:18px;margin-bottom:26px;border-bottom:1.5px solid var(--ink)}
+  .brand h1{font-family:"Fraunces",serif;font-weight:600;font-size:clamp(26px,4vw,40px);line-height:1.02;margin:0;letter-spacing:-.01em}
+  .brand h1 em{font-style:italic;color:var(--accent)}
+  .topright{display:flex;align-items:center;gap:14px}
+  .status{display:flex;align-items:center;gap:8px;font-family:"IBM Plex Mono",monospace;font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-soft);white-space:nowrap}
+  .dot{width:9px;height:9px;border-radius:50%;background:#c9bda6}
+  .dot.live{background:var(--good);box-shadow:0 0 0 3px rgba(47,111,79,.18)}
+  .gear{background:transparent;border:1.5px solid var(--line);color:var(--ink-soft);border-radius:9px;padding:7px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+  .gear:hover{border-color:var(--ink);color:var(--ink)}
+
+  .panel{background:var(--card);border:1.5px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px;margin-bottom:22px}
+  .phead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .phead h2{font-family:"Fraunces",serif;font-weight:600;font-size:18px;margin:0}
+  label.fld{display:block}
+  label.fld>span{display:block;font-size:11px;font-weight:600;letter-spacing:.04em;color:var(--ink-soft);text-transform:uppercase;margin-bottom:6px}
+  input,select{width:100%;font:inherit;font-size:14px;color:var(--ink);background:var(--paper);border:1.5px solid var(--line);border-radius:9px;padding:10px 12px;outline:none;transition:border-color .15s,box-shadow .15s}
+  input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(224,80,31,.14)}
+  .mono{font-family:"IBM Plex Mono",monospace}
+  button{font:inherit;font-weight:600;cursor:pointer;border-radius:10px;border:1.5px solid var(--ink);background:var(--ink);color:var(--paper);padding:11px 18px;transition:transform .08s,background .15s}
+  button:hover{background:#000}button:active{transform:translateY(1px)}
+  button.accent{background:var(--accent);border-color:var(--accent)}button.accent:hover{background:var(--accent-deep);border-color:var(--accent-deep)}
+  button.ghost{background:transparent;color:var(--ink);border-color:var(--line)}button.ghost:hover{background:var(--paper);border-color:var(--ink)}
+  button.sm{padding:7px 12px;font-size:13px}
+  .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .spacer{flex:1}
+  .note{font-size:12.5px;color:var(--ink-soft);margin:12px 0 0}.note a{color:var(--accent-deep)}
+  .grid{display:grid;gap:14px}.g2{grid-template-columns:1fr 1fr}@media(max-width:640px){.g2{grid-template-columns:1fr}}
+  .msg{margin-top:14px;padding:11px 14px;border-radius:10px;font-size:13.5px;display:none}.msg.show{display:block}
+  .msg.err{background:#fdeae3;border:1px solid #f3c2ad;color:#9a2f0c}
+  .msg.ok{background:#e4efe6;border:1px solid #bcd9c4;color:var(--good)}
+  .msg.info{background:#fbf2da;border:1px solid #ecd9a6;color:#8a6d1f}
+  .hidden{display:none!important}
+
+  .modes{display:inline-flex;background:var(--paper);border:1.5px solid var(--line);border-radius:999px;padding:4px;gap:4px}
+  .modes button{background:transparent;color:var(--ink-soft);border:none;border-radius:999px;padding:9px 20px;font-weight:600}
+  .modes button.on{background:var(--ink);color:var(--paper)}
+
+  .timing{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin-bottom:10px}
+  .timing label.fld{flex:1 1 120px;min-width:110px}
+  .timing .rm{flex:0 0 auto;background:transparent;border:1.5px solid var(--line);color:var(--ink-soft);border-radius:9px;padding:10px 12px;height:42px}
+  .timing .rm:hover{border-color:var(--accent);color:var(--accent)}
+
+  .results{margin-top:6px}
+  .rescard{border:1.5px solid var(--line);border-radius:var(--radius);background:var(--card);margin-bottom:16px;overflow:hidden;box-shadow:var(--shadow);opacity:0;transform:translateY(8px);animation:rise .4s ease forwards}
+  @keyframes rise{to{opacity:1;transform:none}}
+  .rhead{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:14px 18px;background:linear-gradient(180deg,#fffdf8,#f8f2e6);border-bottom:1.5px solid var(--line)}
+  .rhead .when{font-family:"Fraunces",serif;font-weight:600;font-size:18px}
+  .rhead .count{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink-soft)}.rhead .count b{color:var(--good);font-size:15px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;padding:16px 18px}
+  .chip{display:inline-flex;flex-direction:column;gap:2px;background:var(--paper);border:1.5px solid var(--line);border-radius:11px;padding:9px 13px;min-width:130px}
+  .chip .nm{font-weight:600}.chip .meta{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink-soft)}
+  .empty{padding:18px;color:var(--ink-soft);font-style:italic}
+  .resfoot{padding:0 18px 14px}
+  details.busy{margin:0 18px 16px;font-size:13px;color:var(--ink-soft)}
+  details.busy summary{cursor:pointer;font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.04em;text-transform:uppercase}
+  details.busy .names{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px}
+  details.busy .names span{background:var(--paper-2);border:1px solid var(--line);border-radius:7px;padding:3px 8px}
+  footer{margin-top:32px;color:var(--ink-soft);font-size:12px;text-align:center;font-family:"IBM Plex Mono",monospace;letter-spacing:.04em}
+  h3.sub{font-family:Fraunces,serif;font-weight:600;font-size:14px;margin:6px 0 10px;color:var(--ink-soft)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand"><h1>Teacher <em>Scheduler</em></h1></div>
+    <div class="topright">
+      <div class="status"><span class="dot" id="statusDot"></span><span id="statusText">Setting up…</span></div>
+      <button class="gear" id="refreshBtn" title="Re-read the latest data from Airtable">↻ Refresh</button>
+      <button class="gear" id="gearBtn">Settings</button>
+    </div>
+  </header>
+
+  <!-- ===== SETTINGS (admin only; hidden by default) ===== -->
+  <section class="panel hidden" id="setupPanel">
+    <div class="phead"><h2>Settings</h2></div>
+    <p class="note" style="margin-top:0">The Airtable connection lives on the server, so there's nothing for users to enter. Fields are detected automatically from the base. Use the section below only if a field was detected wrong — for a change that sticks for everyone, set it in the <span class="mono">OVERRIDE</span> block in the code and redeploy.</p>
+
+    <details id="advanced" style="margin-top:16px" open>
+      <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--ink-soft)">Adjust detected fields (this browser only)</summary>
+      <div style="margin-top:14px">
+        <h3 class="sub">Teachers table</h3>
+        <div class="grid g2">
+          <label class="fld"><span>Table</span><div id="mTeacherTable"></div></label>
+          <label class="fld"><span>Teacher name</span><div id="mTeacherName"></div></label>
+          <label class="fld"><span>Subject</span><div id="mSubject"></div></label>
+          <label class="fld"><span>Trial-qualified field</span><div id="mTrial"></div></label>
+          <label class="fld"><span>Status field</span><div id="mStatus"></div></label>
+        </div>
+        <div class="grid g2" id="dayFieldsGrid" style="margin-top:10px"></div>
+        <h3 class="sub" style="margin-top:16px">Schedule table</h3>
+        <div class="grid g2">
+          <label class="fld"><span>Table</span><div id="mClassTable"></div></label>
+          <label class="fld"><span>Main teacher</span><div id="mMain"></div></label>
+          <label class="fld"><span>Relief teacher</span><div id="mRelief"></div></label>
+          <label class="fld"><span>Date</span><div id="mDate"></div></label>
+          <label class="fld"><span>Time source field</span><div id="mTimeField"></div></label>
+          <label class="fld"><span>Time pattern</span><input type="text" id="mTimeRegex" class="mono" value="(\d{1,2})\s*(am|pm)"></label>
+        </div>
+        <button class="ghost sm" id="saveMapBtn" style="margin-top:14px">Save fields &amp; reload</button>
+      </div>
+    </details>
+    <div class="msg" id="setupMsg"></div>
+  </section>
+
+  <!-- ===== QUERY ===== -->
+  <section class="panel hidden" id="queryPanel">
+    <div class="modes" id="modeToggle">
+      <button data-mode="main" class="on">Main teacher</button>
+      <button data-mode="relief">Relief teacher</button>
+    </div>
+
+    <div style="margin-top:18px" id="timingList"></div>
+    <div class="row">
+      <button class="ghost sm" id="addBtn">+ Add another</button>
+      <span class="spacer"></span>
+      <button class="accent" id="findBtn">Find teachers</button>
+    </div>
+    <div class="msg" id="queryMsg"></div>
+  </section>
+
+  <div class="results" id="results"></div>
+  <footer id="footerInfo">Runs entirely in your browser</footer>
+</div>
+
+<script>
+/* Teacher Scheduler — fields auto-detected from schema; matching runs locally.
+   MAIN  (recurring): subject + day + time -> available teachers of that subject,
+                      minus anyone who is MAIN teacher at that weekday+time (any week).
+   RELIEF (one-off):  subject + date + day + time -> available teachers of that subject,
+                      minus anyone (main OR relief) assigned on that exact date+time. */
+
+const WEEKDAYS=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+
+/* ====================================================================
+   SHARED FIELD OVERRIDES (admin only)
+   Fields are auto-detected from your base. If auto-detect ever picks the
+   wrong field, pin the correct field NAME here and redeploy — it then
+   applies to everyone. Leave blank to rely on auto-detect.
+   ==================================================================== */
+const OVERRIDE = {
+  // teacherName: "Teacher Name",
+  // subject:     "Subject",
+  // trial:       "Trial Teacher",
+  // status:      "Status",
+  // main:        "Main Teacher",
+  // relief:      "Relief Teacher",
+  // date:        "Date",
+  // timeField:   "Class Code",
+};
+
+const mem={};
+const store={get:k=>{try{return localStorage.getItem(k)}catch(e){return mem[k]??null}},
+  set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){mem[k]=v}},
+  del:k=>{try{localStorage.removeItem(k)}catch(e){delete mem[k]}}};
+
+let SCHEMA=null, CONFIG={dayFields:{}}, TEACHERS=[], SCHEDULE=[], HOURS=[], SUBJECTS=[], ID2NAME={}, MODE="main";
+function save(){/* nothing to persist client-side in the hosted version */}
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function msg(el,t,k){el.textContent=t;el.className="msg show "+(k||"info")}
+function clr(el){el.className="msg"}
+function status(t,live){$("#statusText").textContent=t;$("#statusDot").className="dot"+(live?" live":"")}
+
+// Data comes from our own server (which holds the Airtable token), never directly from Airtable.
+async function api(path){
+  const r=await fetch(path);
+  let d=null;try{d=await r.json()}catch(e){}
+  if(!r.ok||(d&&d.error)){throw new Error((d&&(d.error&&d.error.message||d.error))||("Server "+r.status))}
+  return d;
+}
+async function fetchSchema(){return api("/api/schema")}
+async function fetchAll(table,fields){
+  let recs=[],offset;
+  do{
+    let q="/api/records?table="+encodeURIComponent(table);
+    const ff=(fields||[]).filter(Boolean);
+    if(ff.length)q+="&fields="+encodeURIComponent(ff.join("||"));
+    if(offset)q+="&offset="+encodeURIComponent(offset);
+    const d=await api(q);recs=recs.concat(d.records||[]);offset=d.offset;
+  }while(offset);
+  return recs;
+}
+
+/* ---------- auto-detect fields from schema ---------- */
+function autodetect(){
+  if(!SCHEMA) return false;
+  const tables=SCHEMA.tables;
+  const dayRe=/(monday|tuesday|wednesday|thursday|friday|saturday|sunday).*avail/i;
+  // teachers table = most "...availability" fields
+  let tt=null,best=-1;
+  tables.forEach(t=>{const n=t.fields.filter(f=>dayRe.test(f.name)).length;if(n>best){best=n;tt=t}});
+  // class table = has main & relief teacher fields
+  const ct=tables.find(t=>t.fields.some(f=>/main.*teacher/i.test(f.name))&&t.fields.some(f=>/relief.*teacher/i.test(f.name)));
+  if(!tt||!ct||best<1) return false;
+  const find=(t,re)=>{const f=t.fields.find(f=>re.test(f.name));return f?f.name:""};
+  CONFIG.teacherTable=tt.name;
+  CONFIG.teacherName=find(tt,/teacher.*name/i)||tt.fields[0].name;
+  CONFIG.subject=find(tt,/^subject/i)||find(tt,/subject/i)||"";
+  CONFIG.trial=find(tt,/trial/i)||"";
+  CONFIG.status=detectStatusField(tt);
+  CONFIG.dayFields={};
+  WEEKDAYS.forEach(d=>{const f=tt.fields.find(f=>new RegExp(d+".*avail","i").test(f.name));if(f)CONFIG.dayFields[d]=f.name});
+  CONFIG.classTable=ct.name;
+  CONFIG.main=find(ct,/main.*teacher/i);
+  CONFIG.relief=find(ct,/relief.*teacher/i);
+  CONFIG.date=find(ct,/^date$/i)||find(ct,/class.*date/i)||find(ct,/date/i);
+  CONFIG.timeField=find(ct,/class\s*code/i)||find(ct,/class\s*schedule/i)||ct.fields[0].name;
+  CONFIG.timeRegex=CONFIG.timeRegex||"(\\d{1,2})\\s*(am|pm)";
+  save();return true;
+}
+// Find the employment-status field: by name ("status"), or by select options
+// that include status-like words (Active / Inactive / Let go / Resigned …).
+const STATUS_VOCAB=/active|inactive|let.?go|resign|terminat|former|left|leave|dismiss|alumni/i;
+function detectStatusField(tt){
+  const byName=tt.fields.find(f=>/status/i.test(f.name));
+  if(byName)return byName.name;
+  const byChoice=tt.fields.find(f=>{const c=f.options&&f.options.choices;return Array.isArray(c)&&c.some(ch=>STATUS_VOCAB.test(ch.name||""))});
+  return byChoice?byChoice.name:"";
+}
+// Fill any blanks in a saved config (e.g. status/trial added in a later version).
+function fillMissing(){
+  if(!SCHEMA)return;
+  const tt=SCHEMA.tables.find(t=>t.name===CONFIG.teacherTable);if(!tt)return;
+  if(!CONFIG.status)CONFIG.status=detectStatusField(tt);
+  if(!CONFIG.trial){const f=tt.fields.find(f=>/trial/i.test(f.name));if(f)CONFIG.trial=f.name}
+  if(!CONFIG.subject){const f=tt.fields.find(f=>/subject/i.test(f.name));if(f)CONFIG.subject=f.name}
+  save();
+}
+
+/* ---------- load everything from the server ---------- */
+async function loadAll(){
+  status("Loading…",false);
+  try{
+    SCHEMA=await fetchSchema();
+    autodetect();                         // derive field mapping from the base
+    Object.assign(CONFIG,clean(OVERRIDE)); // admin pins win
+    renderMapping(true);
+    await loadData();
+  }catch(e){
+    status("Error",false);
+    msg($("#setupMsg"),e.message+" — check the AIRTABLE_TOKEN and AIRTABLE_BASE_ID environment variables in Vercel.","err");
+    $("#setupPanel").classList.remove("hidden");
+  }
+}
+function clean(o){const r={};for(const k in o){if(o[k])r[k]=o[k]}return r}
+
+/* ---------- advanced mapping UI (only if needed) ---------- */
+function renderMapping(hasSchema){
+  const names=hasSchema?SCHEMA.tables.map(t=>t.name):null;
+  const fieldsOf=n=>{const t=(SCHEMA?.tables||[]).find(t=>t.name===n);return t?t.fields.map(f=>f.name):null};
+  const pick=(id,list,val,blank)=>list
+    ? `<select id="${id}">${(blank?'<option value="">— none —</option>':"")+list.map(o=>`<option ${o===val?"selected":""}>${esc(o)}</option>`).join("")}</select>`
+    : `<input type="text" id="${id}" value="${esc(val||"")}" placeholder="field name">`;
+  $("#mTeacherTable").innerHTML=pick("selTT",names,CONFIG.teacherTable);
+  $("#mClassTable").innerHTML=pick("selCT",names,CONFIG.classTable);
+  const tFields=()=>$("#selTT")?fieldsOf($("#selTT").value):null;
+  const cFields=()=>$("#selCT")?fieldsOf($("#selCT").value):null;
+  const drawT=()=>{const fl=hasSchema?tFields():null;
+    $("#mTeacherName").innerHTML=pick("selTN",fl,CONFIG.teacherName);
+    $("#mSubject").innerHTML=pick("selSub",fl,CONFIG.subject,true);
+    $("#mTrial").innerHTML=pick("selTrial",fl,CONFIG.trial,true);
+    $("#mStatus").innerHTML=pick("selStatus",fl,CONFIG.status,true);
+    $("#dayFieldsGrid").innerHTML=WEEKDAYS.map(d=>`<label class="fld"><span>${d}</span>${pick("day_"+d,fl,CONFIG.dayFields[d]||d+" Availability")}</label>`).join("");};
+  const drawC=()=>{const fl=hasSchema?cFields():null;
+    $("#mMain").innerHTML=pick("selMain",fl,CONFIG.main||"Main Teacher");
+    $("#mRelief").innerHTML=pick("selRelief",fl,CONFIG.relief||"Relief Teacher");
+    $("#mDate").innerHTML=pick("selDate",fl,CONFIG.date||"Date");
+    $("#mTimeField").innerHTML=pick("selTime",fl,CONFIG.timeField||"Class Code");};
+  drawT();drawC();
+  if(hasSchema){$("#selTT").onchange=drawT;$("#selCT").onchange=drawC;}
+  $("#mTimeRegex").value=CONFIG.timeRegex||"(\\d{1,2})\\s*(am|pm)";
+}
+function readMapping(){
+  const v=id=>{const e=$("#"+id);return e?e.value.trim():""};
+  CONFIG.teacherTable=v("selTT");CONFIG.teacherName=v("selTN");CONFIG.subject=v("selSub");CONFIG.trial=v("selTrial");CONFIG.status=v("selStatus");
+  CONFIG.classTable=v("selCT");CONFIG.main=v("selMain");CONFIG.relief=v("selRelief");
+  CONFIG.date=v("selDate");CONFIG.timeField=v("selTime");
+  CONFIG.timeRegex=$("#mTimeRegex").value.trim()||"(\\d{1,2})\\s*(am|pm)";
+  CONFIG.dayFields={};WEEKDAYS.forEach(d=>{const e=$("#day_"+d);if(e&&e.value.trim())CONFIG.dayFields[d]=e.value.trim()});
+  save();
+}
+
+/* ---------- parsing helpers ---------- */
+function slotHour(s){if(s==null)return null;let x=String(s).toLowerCase().replace(/\(peak\)/g,"").trim();if(!x||x==="none")return null;
+  const head=x.split("-")[0];
+  let m=head.match(/(\d{1,2})(?::?\d{2})?\s*(am|pm)/);if(m){let h=parseInt(m[1])%12;if(m[2]==="pm")h+=12;return h}
+  m=head.match(/(\d{1,2}):(\d{2})/);if(m)return parseInt(m[1])%24;
+  return null}
+function classHour(t,re){
+  if(t==null)return null;
+  const str=String(t);
+  // robust am/pm (tolerates minutes like 7:30PM or 730pm)
+  let m=str.match(/(\d{1,2})(?::?\d{2})?\s*(am|pm)/i);
+  if(m){let h=parseInt(m[1])%12;if(m[2].toLowerCase()==="pm")h+=12;return h}
+  // 24h "15:00"
+  m=str.match(/\b(\d{1,2}):(\d{2})\b/);
+  if(m)return parseInt(m[1])%24;
+  // user-supplied custom pattern as a last resort
+  try{m=str.match(new RegExp(re,"i"));if(m)return parseInt(m[1])%24}catch(e){}
+  return null;
+}
+// normalise a name to an order-/comma-insensitive key: "Tan, Jia Wei" === "Jia Wei Tan"
+function nameKey(s){return String(s==null?"":s).toLowerCase().replace(/[.,]/g," ").split(/\s+/).filter(Boolean).sort().join(" ")}
+const isRecId=s=>/^rec[0-9A-Za-z]{10,}$/.test(String(s));
+// turn an assigned teacher value (record id, {id,name}, or a name) into {id, key}
+function resolveAssigned(v){
+  if(v&&typeof v==="object"){const id=v.id||null;const nm=v.name||(id&&ID2NAME[id])||"";return{id,key:nameKey(nm)}}
+  const s=String(v);
+  if(isRecId(s))return{id:s,key:nameKey(ID2NAME[s]||"")};
+  return{id:null,key:nameKey(s)};
+}
+function weekday(d){if(!d)return null;const m=String(d).match(/(\d{4})-(\d{2})-(\d{2})/);if(!m)return null;return new Date(Date.UTC(+m[1],+m[2]-1,+m[3])).getUTCDay()}
+function arr(v){if(v==null)return[];if(Array.isArray(v))return v.map(x=>x&&x.id?x.id:x);return[v]}
+// teacher's subject tokens, lowercased (handles multi-select, linked, or text)
+function subjTokens(v){return arr(v).map(x=>String(x&&x.name?x.name:x).toLowerCase())}
+// does a teacher qualify for the selected subject ("Math" / "Science")?
+function teaches(tokens,selected){const key=selected.toLowerCase().startsWith("sci")?"sci":"math";return tokens.some(t=>t.includes(key))}
+// is the teacher trial-qualified? lenient truthy: checkbox true, a tag, "yes", "trial", etc.
+function isTrial(v){if(v==null||v===false)return false;if(v===true)return true;
+  if(Array.isArray(v))return v.length>0;const s=String(v).trim().toLowerCase();
+  return s!==""&&!/^(no|false|0|none|n)$/.test(s)}
+// active = the status contains the word "active" ("inactive" is one token, so it won't match)
+function isActive(v){
+  if(v===true)return true;
+  if(v===false||v==null)return false;
+  return arr(v).some(x=>String(x&&x.name?x.name:x).toLowerCase().split(/\s+/).includes("active"));
+}
+
+/* ---------- load data ---------- */
+async function loadData(){
+  if(!CONFIG.teacherTable||!CONFIG.classTable){msg($("#setupMsg"),"Pick both tables under Advanced.","err");return}
+  status("Loading…",false);msg($("#setupMsg"),"Loading teachers and schedule…","info");
+  try{
+    fillMissing(); // backfill status/trial/subject if a saved config predates them
+    const tr=await fetchAll(CONFIG.teacherTable,null);
+    TEACHERS=tr.map(r=>{const a={};WEEKDAYS.forEach(d=>{const f=CONFIG.dayFields[d];const v=f?r.fields[f]:null;a[d]=Array.isArray(v)?v:(v?[v]:[])});
+      return{id:r.id,name:r.fields[CONFIG.teacherName]||"(unnamed)",
+        subjects:subjTokens(r.fields[CONFIG.subject]),
+        trial:CONFIG.trial?isTrial(r.fields[CONFIG.trial]):false,
+        active:CONFIG.status?isActive(r.fields[CONFIG.status]):true,
+        avail:a}});
+    const total=TEACHERS.length;
+    if(CONFIG.status)TEACHERS=TEACHERS.filter(t=>t.active);
+    const dropped=total-TEACHERS.length;
+
+    // Build id->name so assigned teachers can be matched even if the schedule's
+    // Main/Relief fields link to a different table than the availability one.
+    ID2NAME={}; tr.forEach(r=>{ID2NAME[r.id]=r.fields[CONFIG.teacherName]||""});
+    if(SCHEMA){
+      const ct=SCHEMA.tables.find(t=>t.name===CONFIG.classTable);
+      const linkTbl=fn=>{const f=ct&&ct.fields.find(f=>f.name===fn);const id=f&&f.options&&f.options.linkedTableId;const t=id&&SCHEMA.tables.find(t=>t.id===id);return t?t.name:null};
+      const extra=[...new Set([linkTbl(CONFIG.main),linkTbl(CONFIG.relief)].filter(n=>n&&n!==CONFIG.teacherTable))];
+      for(const tn of extra){
+        const t=SCHEMA.tables.find(t=>t.name===tn),pf=t?t.fields[0].name:null;
+        try{(await fetchAll(tn,pf?[pf]:null)).forEach(r=>{ID2NAME[r.id]=pf?(r.fields[pf]||""):""})}catch(e){}
+      }
+    }
+
+    const sr=await fetchAll(CONFIG.classTable,[CONFIG.main,CONFIG.relief,CONFIG.date,CONFIG.timeField].filter(Boolean));
+    SCHEDULE=sr.map(r=>({weekday:weekday(r.fields[CONFIG.date]),hour:classHour(r.fields[CONFIG.timeField],CONFIG.timeRegex),
+      dateISO:(String(r.fields[CONFIG.date]||"").match(/\d{4}-\d{2}-\d{2}/)||[""])[0],
+      main:arr(r.fields[CONFIG.main]).map(resolveAssigned),
+      relief:arr(r.fields[CONFIG.relief]).map(resolveAssigned)}));
+    const hs=new Set();TEACHERS.forEach(t=>WEEKDAYS.forEach(d=>t.avail[d].forEach(s=>{const h=slotHour(s);if(h!=null)hs.add(h)})));
+    HOURS=[...hs].sort((a,b)=>a-b);if(!HOURS.length)HOURS=[9,10,11,12,13,14,15,16,17,18,19,20,21];
+
+    // surface any setup gaps that would quietly break a filter
+    const issues=[];
+    if(!CONFIG.status)issues.push("a Status field (inactive teachers can't be filtered)");
+    if(!CONFIG.subject)issues.push("a Subject field (subject matching won't work)");
+    const someoneQualifies=TEACHERS.some(t=>t.subjects.length);
+    if(CONFIG.subject&&!someoneQualifies)issues.push("readable subject values — the Subject field may be a linked record; tell me and I'll resolve it");
+
+    if(CONFIG.status)status("Live · "+TEACHERS.length+" active teachers",true);
+    else status("Live · "+TEACHERS.length+" teachers",true);
+    $("#footerInfo").textContent=(CONFIG.status?("Showing "+TEACHERS.length+" active teachers ("+dropped+" inactive excluded)"):("Loaded "+TEACHERS.length+" teachers"))+" · "+SCHEDULE.length+" sessions";
+
+    if(issues.length){
+      msg($("#setupMsg"),"Heads up — couldn't confirm "+issues.join("; and ")+". Check Settings → Advanced.","info");
+      $("#setupPanel").classList.remove("hidden");$("#advanced").open=true;
+    }else{
+      clr($("#setupMsg"));$("#setupPanel").classList.add("hidden");
+    }
+    initQuery();
+  }catch(e){status("Error",false);msg($("#setupMsg"),"Could not load: "+e.message,"err")}
+}
+
+/* ---------- query UI ---------- */
+function hourLabel(h){const ap=h<12?"am":"pm";let x=h%12||12;return x+ap}
+function hourOpts(sel){return HOURS.map(h=>`<option value="${h}" ${h===sel?"selected":""}>${hourLabel(h)}</option>`).join("")}
+function subjOpts(){return '<option>Math</option><option>Science</option>'}
+function typeOpts(){return '<option value="regular">Regular</option><option value="trial">Trial</option>'}
+function dayOpts(sel){return WEEKDAYS.map((d,i)=>`<option value="${i}" ${i===sel?"selected":""}>${d}</option>`).join("")}
+
+function initQuery(){$("#queryPanel").classList.remove("hidden");setMode("main")}
+function setMode(m){MODE=m;document.querySelectorAll("#modeToggle button").forEach(b=>b.classList.toggle("on",b.dataset.mode===m));
+  $("#timingList").innerHTML="";addRow();$("#results").innerHTML=""}
+
+function addRow(){
+  const row=document.createElement("div");row.className="timing";
+  if(MODE==="main"){
+    row.innerHTML=`
+      <label class="fld"><span>Subject</span><select class="t-sub">${subjOpts()}</select></label>
+      <label class="fld"><span>Class type</span><select class="t-type">${typeOpts()}</select></label>
+      <label class="fld"><span>Day</span><select class="t-day">${dayOpts(3)}</select></label>
+      <label class="fld"><span>Time</span><select class="t-hour">${hourOpts(19)}</select></label>
+      <button class="rm" title="Remove">✕</button>`;
+  }else{
+    row.innerHTML=`
+      <label class="fld"><span>Subject</span><select class="t-sub">${subjOpts()}</select></label>
+      <label class="fld"><span>Class type</span><select class="t-type">${typeOpts()}</select></label>
+      <label class="fld"><span>Date</span><input type="date" class="t-date"></label>
+      <label class="fld"><span>Day</span><select class="t-day">${dayOpts(3)}</select></label>
+      <label class="fld"><span>Time</span><select class="t-hour">${hourOpts(19)}</select></label>
+      <button class="rm" title="Remove">✕</button>`;
+    const dt=row.querySelector(".t-date"),dy=row.querySelector(".t-day");
+    dt.onchange=()=>{const w=weekday(dt.value);if(w!=null)dy.value=w};
+  }
+  row.querySelector(".rm").onclick=()=>{if($("#timingList").children.length>1)row.remove()};
+  $("#timingList").appendChild(row);
+}
+
+/* ---------- matching ----------
+   A teacher is "busy" for a slot if they are an assigned teacher on a class in
+   that slot. We match either by record ID (same-table links) or by name key
+   (cross-table links / lookup / text fields), so it works whatever the field type. */
+function pool(weekdayIdx,hour,subject,type){
+  const day=WEEKDAYS[weekdayIdx];
+  return TEACHERS.filter(t=>{
+    if(!teaches(t.subjects,subject))return false;        // qualified for this subject (Math/Science)
+    if(type==="trial"&&!t.trial)return false;            // trial class -> must be trial-qualified
+    return (t.avail[day]||[]).some(s=>slotHour(s)===hour);// free that day/time
+  }).map(t=>({id:t.id,name:t.name,key:nameKey(t.name),slot:(t.avail[day]||[]).find(s=>slotHour(s)===hour)}));
+}
+function addBusy(list,ids,keys){list.forEach(a=>{if(a.id)ids.add(a.id);if(a.key)keys.add(a.key)})}
+function isBusy(t,ids,keys){return ids.has(t.id)||(t.key&&keys.has(t.key))}
+function runMain(weekdayIdx,hour,subject,type){
+  const ids=new Set(),keys=new Set();
+  SCHEDULE.forEach(s=>{if(s.weekday===weekdayIdx&&s.hour===hour)addBusy(s.main,ids,keys)});
+  return done(pool(weekdayIdx,hour,subject,type),ids,keys);
+}
+function runRelief(dateISO,weekdayIdx,hour,subject,type){
+  const ids=new Set(),keys=new Set();
+  SCHEDULE.forEach(s=>{if(s.dateISO===dateISO&&s.hour===hour){addBusy(s.main,ids,keys);addBusy(s.relief,ids,keys)}});
+  return done(pool(weekdayIdx,hour,subject,type),ids,keys);
+}
+function done(p,ids,keys){return{free:p.filter(t=>!isBusy(t,ids,keys)),busyNames:p.filter(t=>isBusy(t,ids,keys)).map(t=>t.name)}}
+
+function find(){
+  const rows=[...$("#timingList").children],out=[];
+  const wantsTrial=rows.some(r=>r.querySelector(".t-type").value==="trial");
+  if(wantsTrial&&!CONFIG.trial){msg($("#queryMsg"),"You picked a Trial class, but no trial-qualified field is set. Add it under Settings → Advanced, or these results would wrongly exclude everyone.","err");return}
+  for(const r of rows){
+    const sub=r.querySelector(".t-sub").value;
+    const type=r.querySelector(".t-type").value;
+    const typeLabel=type==="trial"?"Trial":"Regular";
+    const hour=parseInt(r.querySelector(".t-hour").value);
+    const day=parseInt(r.querySelector(".t-day").value);
+    if(MODE==="main"){
+      const res=runMain(day,hour,sub,type);
+      out.push({label:`${sub} · ${typeLabel} · ${WEEKDAYS[day]} · ${hourLabel(hour)}`,...res});
+    }else{
+      const date=r.querySelector(".t-date").value;
+      if(!date){msg($("#queryMsg"),"Pick a date for each relief slot.","err");return}
+      const res=runRelief(date,day,hour,sub,type);
+      out.push({label:`${sub} · ${typeLabel} · ${fmt(date)} · ${hourLabel(hour)}`,...res});
+    }
+  }
+  clr($("#queryMsg"));render(out);
+}
+function fmt(iso){const m=iso.match(/(\d{4})-(\d{2})-(\d{2})/);if(!m)return iso;
+  return new Date(Date.UTC(+m[1],+m[2]-1,+m[3])).toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric",timeZone:"UTC"})}
+
+function render(list){
+  const root=$("#results");root.innerHTML="";
+  list.forEach((r,i)=>{
+    const card=document.createElement("div");card.className="rescard";card.style.animationDelay=(i*60)+"ms";
+    const chips=r.free.length
+      ?`<div class="chips">${r.free.map(t=>`<div class="chip"><span class="nm">${esc(t.name)}</span><span class="meta">${esc(t.slot||"")}</span></div>`).join("")}</div>`
+      :`<div class="empty">No available, unassigned teacher for this slot.</div>`;
+    const busy=r.busyNames.length?`<details class="busy"><summary>${r.busyNames.length} free that slot but already teaching</summary><div class="names">${r.busyNames.map(n=>`<span>${esc(n)}</span>`).join("")}</div></details>`:"";
+    const copy=r.free.length?`<div class="resfoot"><button class="ghost sm copyBtn">Copy names</button></div>`:"";
+    card.innerHTML=`<div class="rhead"><div class="when">${esc(r.label)}</div><div class="count"><b>${r.free.length}</b> available</div></div>${chips}${busy}${copy}`;
+    if(r.free.length)card.querySelector(".copyBtn").onclick=()=>{navigator.clipboard?.writeText(r.free.map(t=>t.name).join("\n"));const b=card.querySelector(".copyBtn");b.textContent="Copied ✓";setTimeout(()=>b.textContent="Copy names",1400)};
+    root.appendChild(card);
+  });
+}
+
+/* ---------- wiring ---------- */
+$("#saveMapBtn").onclick=()=>{readMapping();loadData()};
+$("#addBtn").onclick=addRow;
+$("#findBtn").onclick=find;
+$("#gearBtn").onclick=()=>{$("#setupPanel").classList.toggle("hidden");if(SCHEMA)renderMapping(true);window.scrollTo({top:0,behavior:"smooth"})};
+$("#refreshBtn").onclick=loadAll;
+document.querySelectorAll("#modeToggle button").forEach(b=>b.onclick=()=>setMode(b.dataset.mode));
+
+/* ---------- boot ---------- */
+loadAll();
+</script>
+</body>
+</html>
