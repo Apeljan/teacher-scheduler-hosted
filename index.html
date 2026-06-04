@@ -188,8 +188,11 @@ function status(t,live){$("#statusText").textContent=t;$("#statusDot").className
 // Data comes from our own server (which holds the Airtable token), never directly from Airtable.
 async function api(path){
   const r=await fetch(path);
+  const ct=r.headers.get("content-type")||"";
+  if(ct.includes("text/html")){throw new Error("Server returned an HTML page instead of JSON (status "+r.status+"). If Vercel deployment protection is enabled, disable it under Project Settings → Deployment Protection.")}
   let d=null;try{d=await r.json()}catch(e){}
   if(!r.ok||(d&&d.error)){throw new Error((d&&(d.error&&d.error.message||d.error))||("Server "+r.status))}
+  if(d===null){throw new Error("Server returned an empty response (status "+r.status+")")}
   return d;
 }
 async function fetchSchema(){return api("/api/schema")}
@@ -256,13 +259,20 @@ async function loadAll(){
   status("Loading…",false);
   try{
     SCHEMA=await fetchSchema();
-    autodetect();                         // derive field mapping from the base
+    if(!SCHEMA||!SCHEMA.tables){throw new Error("Server returned no schema — check the AIRTABLE_TOKEN and AIRTABLE_BASE_ID environment variables in Vercel.")}
+    const detected=autodetect();         // derive field mapping from the base
     Object.assign(CONFIG,clean(OVERRIDE)); // admin pins win
     renderMapping(true);
+    if(!detected&&!CONFIG.teacherTable){
+      status("Error",false);
+      msg($("#setupMsg"),"Could not auto-detect tables. Open Settings → Advanced and pick the Teachers and Schedule tables manually.","err");
+      $("#setupPanel").classList.remove("hidden");$("#advanced").open=true;
+      return;
+    }
     await loadData();
   }catch(e){
     status("Error",false);
-    msg($("#setupMsg"),e.message+" — check the AIRTABLE_TOKEN and AIRTABLE_BASE_ID environment variables in Vercel.","err");
+    msg($("#setupMsg"),e.message,"err");
     $("#setupPanel").classList.remove("hidden");
   }
 }
@@ -352,7 +362,7 @@ function isActive(v){
 
 /* ---------- load data ---------- */
 async function loadData(){
-  if(!CONFIG.teacherTable||!CONFIG.classTable){msg($("#setupMsg"),"Pick both tables under Advanced.","err");return}
+  if(!CONFIG.teacherTable||!CONFIG.classTable){status("Error",false);msg($("#setupMsg"),"Pick both tables under Advanced.","err");$("#setupPanel").classList.remove("hidden");$("#advanced").open=true;return}
   status("Loading…",false);msg($("#setupMsg"),"Loading teachers and schedule…","info");
   try{
     fillMissing(); // backfill status/trial/subject if a saved config predates them
