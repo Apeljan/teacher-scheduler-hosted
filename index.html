@@ -186,16 +186,15 @@ function clr(el){el.className="msg"}
 function status(t,live){$("#statusText").textContent=t;$("#statusDot").className="dot"+(live?" live":"")}
 
 // Data comes from our own server (which holds the Airtable token), never directly from Airtable.
+let BUST=false; // set true by the Refresh button to bypass the edge cache
+function bustQ(sep){return BUST?(sep+"bust="+Date.now()):""}
 async function api(path){
   const r=await fetch(path);
-  const ct=r.headers.get("content-type")||"";
-  if(ct.includes("text/html")){throw new Error("Server returned an HTML page instead of JSON (status "+r.status+"). If Vercel deployment protection is enabled, disable it under Project Settings → Deployment Protection.")}
   let d=null;try{d=await r.json()}catch(e){}
   if(!r.ok||(d&&d.error)){throw new Error((d&&(d.error&&d.error.message||d.error))||("Server "+r.status))}
-  if(d===null){throw new Error("Server returned an empty response (status "+r.status+")")}
   return d;
 }
-async function fetchSchema(){return api("/api/schema")}
+async function fetchSchema(){return api("/api/schema"+bustQ("?"))}
 async function fetchAll(table,fields){
   let recs=[],offset;
   do{
@@ -203,6 +202,7 @@ async function fetchAll(table,fields){
     const ff=(fields||[]).filter(Boolean);
     if(ff.length)q+="&fields="+encodeURIComponent(ff.join("||"));
     if(offset)q+="&offset="+encodeURIComponent(offset);
+    q+=bustQ("&");
     const d=await api(q);recs=recs.concat(d.records||[]);offset=d.offset;
   }while(offset);
   return recs;
@@ -259,20 +259,13 @@ async function loadAll(){
   status("Loading…",false);
   try{
     SCHEMA=await fetchSchema();
-    if(!SCHEMA||!SCHEMA.tables){throw new Error("Server returned no schema — check the AIRTABLE_TOKEN and AIRTABLE_BASE_ID environment variables in Vercel.")}
-    const detected=autodetect();         // derive field mapping from the base
+    autodetect();                         // derive field mapping from the base
     Object.assign(CONFIG,clean(OVERRIDE)); // admin pins win
     renderMapping(true);
-    if(!detected&&!CONFIG.teacherTable){
-      status("Error",false);
-      msg($("#setupMsg"),"Could not auto-detect tables. Open Settings → Advanced and pick the Teachers and Schedule tables manually.","err");
-      $("#setupPanel").classList.remove("hidden");$("#advanced").open=true;
-      return;
-    }
     await loadData();
   }catch(e){
     status("Error",false);
-    msg($("#setupMsg"),e.message,"err");
+    msg($("#setupMsg"),e.message+" — check the AIRTABLE_TOKEN and AIRTABLE_BASE_ID environment variables in Vercel.","err");
     $("#setupPanel").classList.remove("hidden");
   }
 }
@@ -361,9 +354,11 @@ function isActive(v){
 }
 
 /* ---------- load data ---------- */
+let SCHED_READY=false;
+function setFindBusy(b){const btn=$("#findBtn");if(!btn)return;btn.disabled=b;btn.textContent=b?"Loading schedule…":"Find teachers";btn.style.opacity=b?.5:1}
 async function loadData(){
-  if(!CONFIG.teacherTable||!CONFIG.classTable){status("Error",false);msg($("#setupMsg"),"Pick both tables under Advanced.","err");$("#setupPanel").classList.remove("hidden");$("#advanced").open=true;return}
-  status("Loading…",false);msg($("#setupMsg"),"Loading teachers and schedule…","info");
+  if(!CONFIG.teacherTable||!CONFIG.classTable){msg($("#setupMsg"),"Pick both tables under Advanced.","err");return}
+  status("Loading teachers…",false);
   try{
     fillMissing(); // backfill status/trial/subject if a saved config predates them
     const tr=await fetchAll(CONFIG.teacherTable,null);
@@ -377,8 +372,22 @@ async function loadData(){
     if(CONFIG.status)TEACHERS=TEACHERS.filter(t=>t.active);
     const dropped=total-TEACHERS.length;
 
-    // Build id->name so assigned teachers can be matched even if the schedule's
-    // Main/Relief fields link to a different table than the availability one.
+    // hours come from teacher availability, so the search UI can render before the schedule loads
+    const hs=new Set();TEACHERS.forEach(t=>WEEKDAYS.forEach(d=>t.avail[d].forEach(s=>{const h=slotHour(s);if(h!=null)hs.add(h)})));
+    HOURS=[...hs].sort((a,b)=>a-b);if(!HOURS.length)HOURS=[9,10,11,12,13,14,15,16,17,18,19,20,21];
+
+    const issues=[];
+    if(!CONFIG.status)issues.push("a Status field (inactive teachers can't be filtered)");
+    if(!CONFIG.subject)issues.push("a Subject field (subject matching won't work)");
+    if(CONFIG.subject&&!TEACHERS.some(t=>t.subjects.length))issues.push("readable subject values — the Subject field may be a linked record; tell me and I'll resolve it");
+    if(issues.length){msg($("#setupMsg"),"Heads up — couldn't confirm "+issues.join("; and ")+". Check Settings → Advanced.","info");$("#setupPanel").classList.remove("hidden");$("#advanced").open=true;}
+    else{clr($("#setupMsg"));$("#setupPanel").classList.add("hidden");}
+
+    initQuery();              // search screen is usable now
+    SCHED_READY=false;setFindBusy(true);
+    status((CONFIG.status?TEACHERS.length+" active teachers · ":"")+"loading schedule…",false);
+
+    // --- background: id->name map + the year of sessions ---
     ID2NAME={}; tr.forEach(r=>{ID2NAME[r.id]=r.fields[CONFIG.teacherName]||""});
     if(SCHEMA){
       const ct=SCHEMA.tables.find(t=>t.name===CONFIG.classTable);
@@ -389,34 +398,16 @@ async function loadData(){
         try{(await fetchAll(tn,pf?[pf]:null)).forEach(r=>{ID2NAME[r.id]=pf?(r.fields[pf]||""):""})}catch(e){}
       }
     }
-
     const sr=await fetchAll(CONFIG.classTable,[CONFIG.main,CONFIG.relief,CONFIG.date,CONFIG.timeField].filter(Boolean));
     SCHEDULE=sr.map(r=>({weekday:weekday(r.fields[CONFIG.date]),hour:classHour(r.fields[CONFIG.timeField],CONFIG.timeRegex),
       dateISO:(String(r.fields[CONFIG.date]||"").match(/\d{4}-\d{2}-\d{2}/)||[""])[0],
       main:arr(r.fields[CONFIG.main]).map(resolveAssigned),
       relief:arr(r.fields[CONFIG.relief]).map(resolveAssigned)}));
-    const hs=new Set();TEACHERS.forEach(t=>WEEKDAYS.forEach(d=>t.avail[d].forEach(s=>{const h=slotHour(s);if(h!=null)hs.add(h)})));
-    HOURS=[...hs].sort((a,b)=>a-b);if(!HOURS.length)HOURS=[9,10,11,12,13,14,15,16,17,18,19,20,21];
 
-    // surface any setup gaps that would quietly break a filter
-    const issues=[];
-    if(!CONFIG.status)issues.push("a Status field (inactive teachers can't be filtered)");
-    if(!CONFIG.subject)issues.push("a Subject field (subject matching won't work)");
-    const someoneQualifies=TEACHERS.some(t=>t.subjects.length);
-    if(CONFIG.subject&&!someoneQualifies)issues.push("readable subject values — the Subject field may be a linked record; tell me and I'll resolve it");
-
-    if(CONFIG.status)status("Live · "+TEACHERS.length+" active teachers",true);
-    else status("Live · "+TEACHERS.length+" teachers",true);
+    SCHED_READY=true;setFindBusy(false);
+    status("Live · "+(CONFIG.status?TEACHERS.length+" active teachers":TEACHERS.length+" teachers"),true);
     $("#footerInfo").textContent=(CONFIG.status?("Showing "+TEACHERS.length+" active teachers ("+dropped+" inactive excluded)"):("Loaded "+TEACHERS.length+" teachers"))+" · "+SCHEDULE.length+" sessions";
-
-    if(issues.length){
-      msg($("#setupMsg"),"Heads up — couldn't confirm "+issues.join("; and ")+". Check Settings → Advanced.","info");
-      $("#setupPanel").classList.remove("hidden");$("#advanced").open=true;
-    }else{
-      clr($("#setupMsg"));$("#setupPanel").classList.add("hidden");
-    }
-    initQuery();
-  }catch(e){status("Error",false);msg($("#setupMsg"),"Could not load: "+e.message,"err")}
+  }catch(e){status("Error",false);setFindBusy(false);msg($("#setupMsg"),"Could not load: "+e.message,"err")}
 }
 
 /* ---------- query UI ---------- */
@@ -481,6 +472,7 @@ function runRelief(dateISO,weekdayIdx,hour,subject,type){
 function done(p,ids,keys){return{free:p.filter(t=>!isBusy(t,ids,keys)),busyNames:p.filter(t=>isBusy(t,ids,keys)).map(t=>t.name)}}
 
 function find(){
+  if(!SCHED_READY){msg($("#queryMsg"),"Still loading the schedule — one moment, then try again.","info");return}
   const rows=[...$("#timingList").children],out=[];
   const wantsTrial=rows.some(r=>r.querySelector(".t-type").value==="trial");
   if(wantsTrial&&!CONFIG.trial){msg($("#queryMsg"),"You picked a Trial class, but no trial-qualified field is set. Add it under Settings → Advanced, or these results would wrongly exclude everyone.","err");return}
@@ -525,7 +517,7 @@ $("#saveMapBtn").onclick=()=>{readMapping();loadData()};
 $("#addBtn").onclick=addRow;
 $("#findBtn").onclick=find;
 $("#gearBtn").onclick=()=>{$("#setupPanel").classList.toggle("hidden");if(SCHEMA)renderMapping(true);window.scrollTo({top:0,behavior:"smooth"})};
-$("#refreshBtn").onclick=loadAll;
+$("#refreshBtn").onclick=async()=>{BUST=true;try{await loadAll()}finally{BUST=false}};
 document.querySelectorAll("#modeToggle button").forEach(b=>b.onclick=()=>setMode(b.dataset.mode));
 
 /* ---------- boot ---------- */
