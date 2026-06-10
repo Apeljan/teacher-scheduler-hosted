@@ -1,6 +1,5 @@
-// GET /api/records?table=NAME&fields=A||B||C&offset=...
-// Returns one page of records (read-only) for the configured base.
-// The Airtable token stays server-side; only data is returned.
+// GET /api/schema  -> Airtable base schema (tables + fields)
+// Uses the server-side token so it never reaches the browser.
 module.exports = async (req, res) => {
   const TOKEN = process.env.AIRTABLE_TOKEN;
   const BASE  = process.env.AIRTABLE_BASE_ID;
@@ -8,22 +7,13 @@ module.exports = async (req, res) => {
     res.status(500).json({ error: "Server is missing AIRTABLE_TOKEN or AIRTABLE_BASE_ID" });
     return;
   }
-  const { table, fields, offset, bust } = req.query || {};
-  if (!table) { res.status(400).json({ error: "Missing 'table' parameter" }); return; }
-
-  let url = `https://api.airtable.com/v0/${BASE}/${encodeURIComponent(table)}?pageSize=100`;
-  if (fields) {
-    // fields arrive as "A||B||C" so field names containing commas stay intact
-    String(fields).split("||").forEach(f => { if (f) url += "&fields%5B%5D=" + encodeURIComponent(f); });
-  }
-  if (offset) url += "&offset=" + encodeURIComponent(offset);
-
   try {
-    const r = await fetch(url, { headers: { Authorization: "Bearer " + TOKEN } });
+    const r = await fetch(`https://api.airtable.com/v0/meta/bases/${BASE}/tables`, {
+      headers: { Authorization: "Bearer " + TOKEN }
+    });
     const data = await r.json();
-    // Cache successful reads at Vercel's edge so repeat loads don't re-hit Airtable.
-    // 'bust' (set by the Refresh button) skips the cache for fresh data.
-    if (r.ok && !bust) res.setHeader("Cache-Control", "public, s-maxage=120, stale-while-revalidate=600");
+    // Schema changes rarely, so cache it a bit longer at the edge.
+    if (r.ok && !(req.query && req.query.bust)) res.setHeader("Cache-Control", "public, s-maxage=300, stale-while-revalidate=3600");
     else res.setHeader("Cache-Control", "no-store");
     res.status(r.status).json(data);
   } catch (e) {
