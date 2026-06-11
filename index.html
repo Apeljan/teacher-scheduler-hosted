@@ -245,7 +245,10 @@ function autodetect(){
   CONFIG.main=find(ct,/main.*teacher/i);
   CONFIG.relief=find(ct,/relief.*teacher/i);
   CONFIG.date=find(ct,/^date$/i)||find(ct,/class.*date/i)||find(ct,/date/i);
-  CONFIG.timeField=find(ct,/class\s*code/i)||find(ct,/class\s*schedule/i)||ct.fields[0].name;
+  // code/time source: prefer a readable (non-link/lookup) field naming the schedule or code
+  var codeCands=ct.fields.filter(function(f){return /class\s*(schedule|code)/i.test(f.name)});
+  var goodCode=codeCands.find(function(f){return !/link|lookup/i.test(f.type||"")});
+  CONFIG.timeField=(goodCode&&goodCode.name)||(codeCands[0]&&codeCands[0].name)||ct.fields[0].name;
   CONFIG.remarks=find(ct,/remark/i)||find(ct,/note/i)||"";
   CONFIG.timeRegex=CONFIG.timeRegex||"(\\d{1,2})\\s*(am|pm)";
   save();return true;
@@ -327,14 +330,14 @@ function readMapping(){
 /* ---------- parsing helpers ---------- */
 function slotHour(s){if(s==null)return null;let x=String(s).toLowerCase().replace(/\(peak\)/g,"").trim();if(!x||x==="none")return null;
   const head=x.split("-")[0];
-  let m=head.match(/(\d{1,2})(?::?\d{2})?\s*(am|pm)/);if(m){let h=parseInt(m[1])%12;if(m[2]==="pm")h+=12;return h}
+  let m=head.match(/(\d{1,2})(?:[:.]?\d{2})?\s*(am|pm)/);if(m){let h=parseInt(m[1])%12;if(m[2]==="pm")h+=12;return h}
   m=head.match(/(\d{1,2}):(\d{2})/);if(m)return parseInt(m[1])%24;
   return null}
 function classHour(t,re){
   if(t==null)return null;
   const str=String(t);
   // robust am/pm (tolerates minutes like 7:30PM or 730pm)
-  let m=str.match(/(\d{1,2})(?::?\d{2})?\s*(am|pm)/i);
+  let m=str.match(/(\d{1,2})(?:[:.]?\d{2})?\s*(am|pm)/i);
   if(m){let h=parseInt(m[1])%12;if(m[2].toLowerCase()==="pm")h+=12;return h}
   // 24h "15:00"
   m=str.match(/\b(\d{1,2}):(\d{2})\b/);
@@ -543,6 +546,7 @@ async function sendOffer(channel,message,btn){
   try{
     const r=await fetch("/api/offer",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({channel,message})});
     const d=await r.json().catch(()=>({}));
+    if(r.status===404&&!(d&&d.error)){throw new Error("the /api/offer function isn't deployed — make sure api/offer.js is committed to the repo")}
     if(!r.ok||d.error)throw new Error(d.error||("Error "+r.status));
     btn.textContent="Offered ✓";btn.classList.add("done");
   }catch(e){
