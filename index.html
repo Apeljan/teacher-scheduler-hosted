@@ -114,6 +114,7 @@
           <label class="fld"><span>Subject</span><div id="mSubject"></div></label>
           <label class="fld"><span>Trial-qualified field</span><div id="mTrial"></div></label>
           <label class="fld"><span>Status field</span><div id="mStatus"></div></label>
+          <label class="fld"><span>Discord channel field</span><div id="mDiscord"></div></label>
         </div>
         <div class="grid g2" id="dayFieldsGrid" style="margin-top:10px"></div>
         <h3 class="sub" style="margin-top:16px">Schedule table</h3>
@@ -238,7 +239,7 @@ function autodetect(){
   CONFIG.subject=find(tt,/^subject/i)||find(tt,/subject/i)||"";
   CONFIG.trial=find(tt,/trial/i)||"";
   CONFIG.status=detectStatusField(tt);
-  CONFIG.discord=find(tt,/discord/i)||"";
+  CONFIG.discord=find(tt,/discord.*(channel|id)/i)||find(tt,/discord/i)||"";
   CONFIG.dayFields={};
   WEEKDAYS.forEach(d=>{const f=tt.fields.find(f=>new RegExp(d+".*avail","i").test(f.name));if(f)CONFIG.dayFields[d]=f.name});
   CONFIG.classTable=ct.name;
@@ -269,7 +270,7 @@ function fillMissing(){
   if(!CONFIG.status)CONFIG.status=detectStatusField(tt);
   if(!CONFIG.trial){const f=tt.fields.find(f=>/trial/i.test(f.name));if(f)CONFIG.trial=f.name}
   if(!CONFIG.subject){const f=tt.fields.find(f=>/subject/i.test(f.name));if(f)CONFIG.subject=f.name}
-  if(!CONFIG.discord){const f=tt.fields.find(f=>/discord/i.test(f.name));if(f)CONFIG.discord=f.name}
+  if(!CONFIG.discord){const f=tt.fields.find(f=>/discord.*(channel|id)/i.test(f.name))||tt.fields.find(f=>/discord/i.test(f.name));if(f)CONFIG.discord=f.name}
   if(!CONFIG.remarks){const ct=SCHEMA.tables.find(t=>t.name===CONFIG.classTable);const f=ct&&ct.fields.find(f=>/remark/i.test(f.name)||/note/i.test(f.name));if(f)CONFIG.remarks=f.name}
   save();
 }
@@ -307,6 +308,7 @@ function renderMapping(hasSchema){
     $("#mSubject").innerHTML=pick("selSub",fl,CONFIG.subject,true);
     $("#mTrial").innerHTML=pick("selTrial",fl,CONFIG.trial,true);
     $("#mStatus").innerHTML=pick("selStatus",fl,CONFIG.status,true);
+    $("#mDiscord").innerHTML=pick("selDiscord",fl,CONFIG.discord,true);
     $("#dayFieldsGrid").innerHTML=WEEKDAYS.map(d=>`<label class="fld"><span>${d}</span>${pick("day_"+d,fl,CONFIG.dayFields[d]||d+" Availability")}</label>`).join("");};
   const drawC=()=>{const fl=hasSchema?cFields():null;
     $("#mMain").innerHTML=pick("selMain",fl,CONFIG.main||"Main Teacher");
@@ -319,7 +321,7 @@ function renderMapping(hasSchema){
 }
 function readMapping(){
   const v=id=>{const e=$("#"+id);return e?e.value.trim():""};
-  CONFIG.teacherTable=v("selTT");CONFIG.teacherName=v("selTN");CONFIG.subject=v("selSub");CONFIG.trial=v("selTrial");CONFIG.status=v("selStatus");
+  CONFIG.teacherTable=v("selTT");CONFIG.teacherName=v("selTN");CONFIG.subject=v("selSub");CONFIG.trial=v("selTrial");CONFIG.status=v("selStatus");CONFIG.discord=v("selDiscord");
   CONFIG.classTable=v("selCT");CONFIG.main=v("selMain");CONFIG.relief=v("selRelief");
   CONFIG.date=v("selDate");CONFIG.timeField=v("selTime");
   CONFIG.timeRegex=$("#mTimeRegex").value.trim()||"(\\d{1,2})\\s*(am|pm)";
