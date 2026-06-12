@@ -47,7 +47,7 @@ module.exports = async (req, res) => {
       body: JSON.stringify({ content: String(message).slice(0, 1900) })
     });
     const data = await r.json().catch(() => ({}));
-    if (!r.ok) { res.status(r.status).json({ error: (data && data.message) || ("Discord " + r.status) }); return; }
+    if (!r.ok) { res.status(r.status).json({ error: (data && data.message) || ("Discord " + r.status), channelId }); return; }
     res.status(200).json({ ok: true, id: data.id });
   } catch (e) {
     res.status(502).json({ error: String(e.message || e) });
