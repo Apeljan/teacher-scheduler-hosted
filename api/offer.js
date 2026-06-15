@@ -32,13 +32,19 @@ module.exports = async (req, res) => {
   try {
     // Resolve to a channel ID: if it's already all digits, use it; else look up by name.
     let channelId = String(channel).trim();
+    let matchedName = channel;
     if (!/^\d{10,}$/.test(channelId)) {
       if (!GUILD) { res.status(500).json({ error: "Server is missing DISCORD_GUILD_ID (needed to look up channels by name)" }); return; }
       const list = await guildChannels(TOKEN, GUILD);
       const want = norm(channel);
-      const match = list.find(c => norm(c.name) === want) || list.find(c => norm(c.name).includes(want));
+      // Prefer real text channels (type 0 = text, 5 = announcement) so we never resolve to a
+      // category or voice channel with a similar name (which would fail with "Missing Access").
+      const texty = list.filter(c => c.type === 0 || c.type === 5);
+      const match = texty.find(c => norm(c.name) === want) || texty.find(c => norm(c.name).includes(want))
+                 || list.find(c => norm(c.name) === want) || list.find(c => norm(c.name).includes(want));
       if (!match) { res.status(404).json({ error: 'No Discord channel matching "' + channel + '"' }); return; }
       channelId = match.id;
+      matchedName = match.name;
     }
 
     const r = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
@@ -47,7 +53,14 @@ module.exports = async (req, res) => {
       body: JSON.stringify({ content: String(message).slice(0, 1900) })
     });
     const data = await r.json().catch(() => ({}));
-    if (!r.ok) { res.status(r.status).json({ error: (data && data.message) || ("Discord " + r.status), channelId, discordCode: data && data.code }); return; }
+    if (!r.ok) {
+      const code = data && data.code;
+      let m = (data && data.message) || ("Discord " + r.status);
+      if (code === 50001 || code === 50013) {
+        m = 'the bot found "#' + matchedName + '" but isn\'t allowed to post there — open that channel\'s settings (Edit Channel \u2192 Permissions) and give the bot, or a role the bot has, an explicit "View Channel" and "Send Messages" allow';
+      }
+      res.status(r.status).json({ error: m }); return;
+    }
     res.status(200).json({ ok: true, id: data.id });
   } catch (e) {
     res.status(502).json({ error: String(e.message || e) });
