@@ -540,7 +540,8 @@ function fmt(iso){const m=iso.match(/(\d{4})-(\d{2})-(\d{2})/);if(!m)return iso;
 
 function offerMessage(item,teacher){
   const note="\n\n_(Heads up: this slot was offered to everyone available for it, so it may be taken if we don't hear back soon.)_";
-  const classLine=item.classCode?`\n**${item.classCode}${item.typeLabel?" "+item.typeLabel+" Class":""}${item.dateISO?" "+item.dateISO:""}**`:"";
+  const classCode=item.classCode||item.sub||"";
+  const classLine=classCode?`\n**${[classCode,item.dateISO].filter(Boolean).join(" ")}**`:"";
   if(item.role==="relief"){
     const on=item.dateText?` on ${item.dateText}`:` (${item.when})`;
     return `Hi ${teacher.name}! A ${item.subject||"class"} class is in need of a relief teacher${on}.${classLine}\nAre you available to take it? Please reply here at your earliest convenience and we'll arrange it!`+note;
@@ -609,9 +610,9 @@ function scanNeeds(){
     const reliefNeeded=s.relief.length===0&&/relief/i.test(remark);
     const regularNeeded=s.main.length===0&&/(regular|main)/i.test(remark);
     if(regularNeeded){const res=runMain(s.weekday,s.hour,subj,type);
-      items.push({label:`${subj||"Class"} · needs a MAIN teacher · ${dateText}`,sub:s.code,classCode:s.name,role:"main",subject:subj,typeLabel,when,dateText,sortKey:s.dateISO,...res});}
+      items.push({label:`${subj||"Class"} · needs a MAIN teacher · ${dateText}`,sub:s.code,classCode:s.name||s.code,dateISO:s.dateISO,role:"main",subject:subj,typeLabel,when,dateText,sortKey:s.dateISO,...res});}
     if(reliefNeeded){const res=runRelief(s.dateISO,s.weekday,s.hour,subj,type);
-      items.push({label:`${subj||"Class"} · needs a RELIEF teacher · ${dateText}`,sub:s.code,classCode:s.name,role:"relief",subject:subj,typeLabel,when,dateText,sortKey:s.dateISO,...res});}
+      items.push({label:`${subj||"Class"} · needs a RELIEF teacher · ${dateText}`,sub:s.code,classCode:s.name||s.code,dateISO:s.dateISO,role:"relief",subject:subj,typeLabel,when,dateText,sortKey:s.dateISO,...res});}
   });
   items.sort((a,b)=>String(a.sortKey||"").localeCompare(String(b.sortKey||"")));
   if(!items.length){root.innerHTML='<div class="rescard"><div class="empty">Nothing flagged right now. A class shows here when its main or relief teacher is empty and the remark asks for one (e.g. "needs a relief teacher").</div></div>';return}
