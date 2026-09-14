@@ -323,6 +323,11 @@ function parseClassCode(code) {
   const timeMinutes = parseCompactTime(timeToken);
   return { level, subjectCode, day, timeMinutes, timeLabel: timeToken };
 }
+function rosterClassCode(code) {
+  return String(code||"")
+    .replace(/(?:[\s,;|_/]+|-)?\d{4}-\d{2}-\d{2}\s*$/, "")
+    .trim();
+}
 // Heuristic match between a class-code subject token (e.g. "SCI") and a teacher's subject list
 function subjectCodeMatches(code, teacherSubjects) {
   if (!code) return true;
@@ -787,8 +792,10 @@ function buildReliability(){
   const byClass={};
   SCHEDULE.forEach(s=>{
     if(!s.code||!s.dt)return;
+    const classCode=rosterClassCode(s.code);
+    if(!classCode)return;
     const actualTeacher=s.reliefName||s.mainName;
-    (byClass[s.code]=byClass[s.code]||[]).push({dt:s.dt,mainTeacher:s.mainName,reliefTeacher:s.reliefName,actualTeacher,
+    (byClass[classCode]=byClass[classCode]||[]).push({dt:s.dt,mainTeacher:s.mainName,reliefTeacher:s.reliefName,actualTeacher,
       isMakeup:s.isMakeup,isTeacherCancel:s.isTeacherCancel,isStudentCancel:s.isStudentCancel,createdAt:s.createdAt});
   });
   const now=new Date();
